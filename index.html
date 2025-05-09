@@ -97,12 +97,14 @@
                 // Replace this URL with your actual n8n webhook URL
                 const webhookUrl = 'https://camapbot.publicvm.com/webhook-test/url-processor';
                 
+                // Thử nhiều cách gửi dữ liệu URLs khác nhau
+                // Cách 1: Gửi trực tiếp URLs dưới dạng text thông thường
                 const response = await fetch(webhookUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'text/plain'  // Thay đổi từ application/json sang text/plain
                     },
-                    body: JSON.stringify({ urls: urls })
+                    body: urls  // Gửi URLs trực tiếp không bọc trong JSON
                 });
                 
                 const data = await response.json();
