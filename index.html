@@ -265,7 +265,11 @@
                 const data = responseData;
                 
                 // Check if the response indicates success
-                const isSuccess = data && (data.success === true || data.success === "true");
+                const isSuccess = data && (
+                    data.success === true || 
+                    data.success === "true" || 
+                    (data.message && data.message.includes("Workflow was started"))
+                );
                 
                 // Show result
                 result.style.display = 'block';
