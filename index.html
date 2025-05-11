@@ -47,6 +47,10 @@
         button:hover {
             background-color: #45a049;
         }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         .result {
             margin-top: 20px;
             padding: 15px;
@@ -64,6 +68,47 @@
         .loading {
             text-align: center;
             display: none;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .copy-btn {
+            background-color: #2196F3;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background-color: #1976D2;
+        }
+        .stats {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f3f3f3;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
         }
     </style>
 </head>
@@ -73,41 +118,108 @@
         <form id="urlForm">
             <p>Paste your URLs below (one URL per line):</p>
             <textarea id="urlsInput" placeholder="https://shopee.vn/example-i.123456.789101112"></textarea>
-            <button type="submit">Process URLs</button>
+            <button type="submit" id="submitBtn">Process URLs</button>
         </form>
         <div class="loading" id="loading">
+            <div class="spinner"></div>
             <p>Processing URLs, please wait...</p>
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <p id="progressText">0%</p>
         </div>
         <div class="result" id="result"></div>
     </div>
 
     <script>
+        // Validate URLs
+        function validateUrls(urls) {
+            const urlPattern = /^https:\/\/shopee\.vn\/.*$/;
+            const urlList = urls.split('\n').filter(url => url.trim());
+            
+            if (urlList.length === 0) {
+                throw new Error('Please enter at least one URL.');
+            }
+            
+            const invalidUrls = urlList.filter(url => !urlPattern.test(url.trim()));
+            if (invalidUrls.length > 0) {
+                throw new Error(`Invalid URLs found: ${invalidUrls.join(', ')}`);
+            }
+            
+            return urlList;
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Results copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+
+        // Fetch with retry
+        async function fetchWithRetry(url, options, retries = 3) {
+            try {
+                return await fetch(url, options);
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return fetchWithRetry(url, options, retries - 1);
+                }
+                throw error;
+            }
+        }
+
+        // Update progress
+        function updateProgress(percent) {
+            const progress = document.getElementById('progress');
+            const progressText = document.getElementById('progressText');
+            progress.style.width = `${percent}%`;
+            progressText.textContent = `${percent}%`;
+        }
+
+        // Main form submission handler
         document.getElementById('urlForm').addEventListener('submit', async function(event) {
             event.preventDefault();
             
             const urls = document.getElementById('urlsInput').value;
             const loading = document.getElementById('loading');
             const result = document.getElementById('result');
-            
-            // Show loading indicator
-            loading.style.display = 'block';
-            result.style.display = 'none';
+            const submitBtn = document.getElementById('submitBtn');
             
             try {
-                // Replace this URL with your actual n8n webhook URL
+                // Validate URLs
+                validateUrls(urls);
+                
+                // Show loading state
+                loading.style.display = 'block';
+                result.style.display = 'none';
+                submitBtn.disabled = true;
+                updateProgress(0);
+                
+                // Webhook URL
                 const webhookUrl = 'https://camapbot.publicvm.com/webhook-test/url-processor';
                 
-                // Thử nhiều cách gửi dữ liệu URLs khác nhau
-                // Cách 1: Gửi trực tiếp URLs dưới dạng text thông thường
-                const response = await fetch(webhookUrl, {
+                // Send request
+                const response = await fetchWithRetry(webhookUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'text/plain'  // Thay đổi từ application/json sang text/plain
+                        'Content-Type': 'text/plain',
+                        'Accept': 'application/json',
+                        'Origin': window.location.origin
                     },
-                    body: urls  // Gửi URLs trực tiếp không bọc trong JSON
+                    body: urls
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                
+                // Update progress to 100%
+                updateProgress(100);
                 
                 // Hide loading indicator
                 loading.style.display = 'none';
@@ -115,10 +227,33 @@
                 // Show result
                 result.style.display = 'block';
                 result.className = data.success ? 'result success' : 'result error';
-                result.innerHTML = `
+                
+                // Create result HTML
+                let resultHTML = `
                     <h3>${data.success ? 'Success!' : 'Error!'}</h3>
                     <p>${data.message}</p>
                 `;
+                
+                // Add stats if available
+                if (data.totalUrls || data.uniqueCount || data.duplicateCount) {
+                    resultHTML += `
+                        <div class="stats">
+                            <p>Total URLs: ${data.totalUrls || 0}</p>
+                            <p>Unique URLs: ${data.uniqueCount || 0}</p>
+                            <p>Duplicate URLs: ${data.duplicateCount || 0}</p>
+                        </div>
+                    `;
+                }
+                
+                // Add copy button
+                resultHTML += `
+                    <button onclick="copyToClipboard('${urls}')" class="copy-btn">
+                        Copy URLs to Clipboard
+                    </button>
+                `;
+                
+                result.innerHTML = resultHTML;
+                
             } catch (error) {
                 // Hide loading indicator
                 loading.style.display = 'none';
@@ -128,9 +263,11 @@
                 result.className = 'result error';
                 result.innerHTML = `
                     <h3>Error!</h3>
-                    <p>Something went wrong. Please try again later.</p>
+                    <p>${error.message || 'Something went wrong. Please try again later.'}</p>
                 `;
                 console.error('Error:', error);
+            } finally {
+                submitBtn.disabled = false;
             }
         });
     </script>
