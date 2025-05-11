@@ -241,7 +241,7 @@
                         if (response.ok) {
                             responseData = await response.json();
                             successful = true;
-                            console.log('Request successful!');
+                            console.log('Request successful!', responseData);
                         } else {
                             console.log(`Endpoint returned status: ${response.status}`);
                         }
@@ -264,23 +264,27 @@
                 // Process the response data
                 const data = responseData;
                 
+                // Check if the response indicates success
+                const isSuccess = data && (data.success === true || data.success === "true");
+                
                 // Show result
                 result.style.display = 'block';
-                result.className = data.success ? 'result success' : 'result error';
+                result.className = isSuccess ? 'result success' : 'result error';
                 
                 // Create result HTML
                 let resultHTML = `
-                    <h3>${data.success ? 'Success!' : 'Error!'}</h3>
-                    <p>${data.message}</p>
+                    <h3>${isSuccess ? 'Success!' : 'Error!'}</h3>
+                    <p>${data.message || 'URLs processed successfully.'}</p>
                 `;
                 
                 // Add stats if available
-                if (data.totalUrls || data.uniqueCount || data.duplicateCount) {
+                if (data.totalUrls || data.uniqueCount || data.duplicateCount || data.groupCount) {
                     resultHTML += `
                         <div class="stats">
                             <p>Total URLs: ${data.totalUrls || 0}</p>
                             <p>Unique URLs: ${data.uniqueCount || 0}</p>
                             <p>Duplicate URLs: ${data.duplicateCount || 0}</p>
+                            ${data.groupCount ? `<p>Groups created: ${data.groupCount}</p>` : ''}
                         </div>
                     `;
                 }
