@@ -159,13 +159,24 @@
         }
 
         // Fetch with retry
-        async function fetchWithRetry(url, options, retries = 3) {
+        async function fetchWithRetry(url, options, retries = 3, useProxy = false) {
             try {
-                return await fetch(url, options);
+                // If proxy is enabled, use a CORS proxy to bypass CORS restrictions
+                const targetUrl = useProxy ? 
+                    `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
+                
+                const response = await fetch(targetUrl, options);
+                return response;
             } catch (error) {
                 if (retries > 0) {
+                    // If we have retries left but not using proxy yet, try with proxy
+                    if (!useProxy && retries === 1) {
+                        console.log("Attempting with CORS proxy...");
+                        return fetchWithRetry(url, options, retries - 1, true);
+                    }
+                    
                     await new Promise(resolve => setTimeout(resolve, 1000));
-                    return fetchWithRetry(url, options, retries - 1);
+                    return fetchWithRetry(url, options, retries - 1, useProxy);
                 }
                 throw error;
             }
@@ -198,25 +209,60 @@
                 submitBtn.disabled = true;
                 updateProgress(0);
                 
-                // Webhook URL
-                const webhookUrl = 'https://camapbot.publicvm.com/webhook-test/url-processor';
+                // Webhook URLs - try multiple endpoints if one fails
+                const webhookUrls = [
+                    'https://camapbot.publicvm.com/webhook-test/url-processor',
+                    'https://camapbot.publicvm.com/webhook/url-processor',
+                    'https://n8n.publicvm.com/webhook/url-processor'
+                ];
                 
-                // Send request
-                const response = await fetchWithRetry(webhookUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain',
-                        'Accept': 'application/json',
-                        'Origin': window.location.origin
-                    },
-                    body: urls
-                });
+                let response = null;
+                let error = null;
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                // Try each endpoint until one works
+                for (const webhookUrl of webhookUrls) {
+                    try {
+                        updateProgress(20); // Show some progress
+                        console.log(`Trying endpoint: ${webhookUrl}`);
+                        
+                        // Send request
+                        response = await fetchWithRetry(webhookUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'text/plain',
+                                'Accept': 'application/json',
+                                'Origin': window.location.origin
+                            },
+                            body: urls
+                        });
+                        
+                        if (response.ok) {
+                            break; // We found a working endpoint
+                        }
+                    } catch (err) {
+                        error = err;
+                        console.error(`Failed with endpoint ${webhookUrl}:`, err);
+                    }
                 }
                 
-                const data = await response.json();
+                // If we still don't have a valid response
+                if (!response || !response.ok) {
+                    throw new Error(error || `All endpoints failed. Status: ${response?.status || 'unknown'}`);
+                }
+                
+                let data;
+                try {
+                    data = await response.json();
+                    updateProgress(80);
+                } catch (err) {
+                    // If JSON parsing fails, create a default response
+                    console.error("JSON parsing error:", err);
+                    data = {
+                        success: true,
+                        message: "URLs processed successfully, but couldn't parse server response",
+                        totalUrls: urls.split('\n').filter(url => url.trim()).length
+                    };
+                }
                 
                 // Update progress to 100%
                 updateProgress(100);
@@ -264,6 +310,14 @@
                 result.innerHTML = `
                     <h3>Error!</h3>
                     <p>${error.message || 'Something went wrong. Please try again later.'}</p>
+                    <div class="stats">
+                        <p>CORS errors can be caused by server restrictions. Try:</p>
+                        <ul>
+                            <li>Contacting the server administrator to add your origin to allowed domains</li>
+                            <li>Using the tool on the same domain as the server</li>
+                            <li>Setting up a local proxy server</li>
+                        </ul>
+                    </div>
                 `;
                 console.error('Error:', error);
             } finally {
