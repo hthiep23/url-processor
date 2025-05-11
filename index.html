@@ -242,6 +242,8 @@
                             responseData = await response.json();
                             successful = true;
                             console.log('Request successful!', responseData);
+                            // Log message để debug
+                            console.log('Response message:', responseData.message);
                         } else {
                             console.log(`Endpoint returned status: ${response.status}`);
                         }
@@ -264,12 +266,22 @@
                 // Process the response data
                 const data = responseData;
                 
+                // Log dữ liệu để debug
+                console.log('Complete response data:', data);
+                
                 // Check if the response indicates success
+                // Kiểm tra nhiều điều kiện có thể được coi là thành công
                 const isSuccess = data && (
                     data.success === true || 
                     data.success === "true" || 
-                    (data.message && data.message.includes("Workflow was started"))
+                    (data.message && (
+                        data.message.includes("Workflow was started") || 
+                        data.message.includes("workflow was started") ||
+                        data.message.toLowerCase().includes("workflow was started")
+                    ))
                 );
+                
+                console.log('Is success?', isSuccess);
                 
                 // Show result
                 result.style.display = 'block';
