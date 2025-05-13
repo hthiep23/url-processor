@@ -117,7 +117,7 @@
         <h1>URL Processor</h1>
         <form id="urlForm">
             <p>Paste your URLs below (one URL per line):</p>
-            <textarea id="urlsInput" placeholder="https://shopee.vn/example-i.123456.789101112"></textarea>
+            <textarea id="urlsInput" placeholder="https://example.com/product"></textarea>
             <button type="submit" id="submitBtn">Process URLs</button>
         </form>
         <div class="loading" id="loading">
@@ -134,7 +134,7 @@
     <script>
         // Validate URLs
         function validateUrls(urls) {
-            const urlPattern = /^https:\/\/shopee\.vn\/.*$/;
+            const urlPattern = /^https:\/\/.*$/;
             const urlList = urls.split('\n').filter(url => url.trim());
             
             if (urlList.length === 0) {
